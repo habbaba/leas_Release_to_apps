@@ -1,0 +1,7 @@
+<templates id="template" xml:space="preserve">
+    <t t-name="LeasStackedHBar">
+        <div>
+            <div class="leas-stacked-bar-container" style="width: 300px; height: 150px;"></div>
+        </div>
+    </t>
+</templates>

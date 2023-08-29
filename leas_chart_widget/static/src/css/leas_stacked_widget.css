@@ -1,0 +1,29 @@
+.leas-bar-container {
+    width: 30px;
+    height: 150px;
+    position: relative;
+}
+
+.leas-bar-segment {
+    width: 100%;
+    height: auto;
+    transition: height 0.5s ease-in-out;
+    overflow: visible;
+}
+
+.leas-bar-segment-title {
+    position: absolute;
+    transform: translateX(50%);
+    padding: 5px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    font-size: 12px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.leas-bar-segment:hover .leas-bar-segment-title {
+    visibility: visible;
+    opacity: 1;
+}

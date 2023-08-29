@@ -1,0 +1,7 @@
+<templates id="template" xml:space="preserve">
+    <t t-name="Leas_default_echarts">
+        <div style="width: 100%; height: 100%;">
+            <div id="leas-bar-container" class="leas-bar-container"></div>
+        </div>
+    </t>
+</templates>

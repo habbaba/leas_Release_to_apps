@@ -1,0 +1,7 @@
+<templates id="template" xml:space="preserve">
+    <t t-name="LeasStackedWidget">
+        <div>
+            <div class="leas-bar-container"></div>
+        </div>
+    </t>
+</templates>
