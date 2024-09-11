@@ -129,7 +129,7 @@ class MrpWorkorder(models.Model):
             if order.state == 'pending' and order.qty_operation_avail > 0:
                 order.state = 'ready' if order.production_availability == 'assigned' else 'waiting'
 
-    @api.constrains('qty_operation_wip', 'qty_operation_comp')
+   """ @api.constrains('qty_operation_wip', 'qty_operation_comp')
     def _check_qty_operation(self):
         for wo in self:
             if wo.state in ['done', 'cancel']:
@@ -152,6 +152,36 @@ class MrpWorkorder(models.Model):
             if wo.qty_operation_comp < max_par_op_qty:
                 raise UserError(_(u"Subsequent operations have started, and the completion quantity "
                                   u"cannot be lower than %s." % str(max_par_op_qty)))
+                                  """
+
+@api.constrains('qty_operation_wip', 'qty_operation_comp')
+def _check_qty_operation(self):
+    for wo in self:
+        if wo.state in ['done', 'cancel']:
+            raise UserError(_(u"Not allowed to modify the completion quantity of completed work orders."))
+        ref_qty = wo.query_comp_qty()
+        if wo.qty_operation_wip > ref_qty or wo.qty_operation_comp > ref_qty or \
+                wo.qty_operation_wip > (ref_qty - wo.qty_operation_comp):
+            raise UserError(_(u"Cannot Exceed Work Order Quantity."))
+        if wo.qty_operation_wip < 0 or wo.qty_operation_comp < 0:
+            raise UserError(_(u"Not Support Negative Numbers."))
+        par_orders = self.browse()
+        next_order = wo.next_work_order_id
+        if not wo.reporting_point:
+            continue
+        while next_order and not next_order.reporting_point:
+            par_orders |= next_order
+            next_order = next_order.next_work_order_id
+        par_orders |= next_order
+
+        if par_orders:
+            max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
+            if wo.qty_operation_comp < max_par_op_qty:
+                raise UserError(_(u"Subsequent operations have started, and the completion quantity "
+                                  u"cannot be lower than %s." % str(max_par_op_qty)))
+        else:
+            # Handle the case where par_orders is empty if necessary
+            _logger.warning("No parallel orders found to check max quantity.")
 
     @api.model
     def create(self, values):
