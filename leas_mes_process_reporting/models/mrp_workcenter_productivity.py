@@ -2,11 +2,9 @@
 from odoo import models, fields, _, api
 from datetime import datetime, timedelta, time
 from odoo.exceptions import UserError
-from odoo.modules import module
 import logging
 
 _logger = logging.getLogger(__name__)
-
 
 class MrpWorkcenterproductivity(models.Model):
     _inherit = 'mrp.workcenter.productivity'
@@ -16,13 +14,44 @@ class MrpWorkcenterproductivity(models.Model):
     action_type = fields.Selection([('pause', 'Pause'), ('block', 'Block'), ('finish', 'Finish')])
     next_rec = fields.Many2one('mrp.workcenter.productivity', 'Next Record')
     workorder_state = fields.Selection(string='WorkOrder Status', related='workorder_id.state')
+    
+    thirty_daily_efficiency = fields.Float(compute='_compute_thirty_daily_efficiency', store=True)
+
+    @api.depends('workorder_id', 'workorder_id.qty_production', 'workorder_id.qty_completed')
+    def _compute_thirty_daily_efficiency(self):
+        """
+        Compute method for thirty_daily_efficiency which calculates efficiency
+        over the past 30 days.
+        """
+        for line in self:
+            try:
+                workorder = line.workorder_id
+                if not workorder or not workorder.qty_production or not workorder.qty_completed:
+                    line.thirty_daily_efficiency = 0.0
+                    continue
+                
+                # Ensure we have valid values to avoid division errors
+                total_efficiency = 0.0
+                qty_production = workorder.qty_production
+                qty_completed = workorder.qty_completed
+
+                if qty_production > 0:
+                    total_efficiency = (qty_completed / qty_production) * 100
+                else:
+                    total_efficiency = 0.0
+                
+                line.thirty_daily_efficiency = total_efficiency
+
+            except Exception as e:
+                # Log error in case something goes wrong
+                _logger.error(f"Error computing thirty_daily_efficiency for Workorder {line.id}: {e}")
+                line.thirty_daily_efficiency = 0.0
 
     @api.onchange('qty_started')
     def _onchange_qty_started(self):
         if self.env.context.get('_prevent_onchange') or not self.id.origin:
             return
         for line in self:
-
             old_value = line._origin.qty_started if line._origin else False
             new_value = line.qty_started
             diff = new_value - old_value
@@ -142,7 +171,6 @@ class MrpWorkcenterproductivity(models.Model):
 
     def calc_daily_efficiency(self):
         self.ensure_one()
-        # 初始化
         production_efficiencies = []
         daily_avg_efficiencies = []
         output_quantity = self.qty_completed
@@ -154,7 +182,6 @@ class MrpWorkcenterproductivity(models.Model):
 
         attendance_obj = self.env['resource.calendar.attendance'].sudo()
         resource_calendar = self.sudo().workcenter_id.resource_calendar_id
-        # resource.calendar.tz_offset
         daily_duration = []
         for pro_time in processing_times:
             start_datetime = pro_time.date_start
@@ -164,74 +191,20 @@ class MrpWorkcenterproductivity(models.Model):
             current_datetime = start_datetime
             total_production_time = timedelta(minutes=0)
             daily_production_time = timedelta(minutes=0)
-            # 计算周数
+
             week_type = -1
             if resource_calendar.two_weeks_calendar:
                 week_type = attendance_obj.get_week_type(start_datetime)
-            # 获取排班记录
             scheduling_plan = resource_calendar.attendance_ids.sorted(lambda t: t.hour_from)
 
-            # 计算加工的总时间（单位：分钟）
             while current_datetime < end_datetime:
                 match_time = timedelta(minutes=1)
-                current_dayofweek = current_datetime.weekday()  # 0 = Monday, 6 = Sunday
+                current_dayofweek = current_datetime.weekday()
                 current_plan = [plan for plan in scheduling_plan if
                                 plan.dayofweek == str(current_dayofweek) and plan.hour_from != plan.hour_to != 0 and (
                                         week_type == -1 or plan.week_type == week_type)]
                 for plan in current_plan:
                     scheduled_end = datetime.combine(current_datetime.date(), self.num_to_time(plan.hour_to))
                     scheduled_start = datetime.combine(current_datetime.date(), self.num_to_time(plan.hour_from))
-                    # 判断当前时间是否在排班时间内
                     if scheduled_end > current_datetime >= scheduled_start:
-                        # 选择实际结束时间和排班结束时间中的较小者，以确保时间不会超过排班
                         end_time_to_use = min(scheduled_end, end_datetime)
-                        # 将实际结束时间和排班开始时间中的较大者作为开始时间，以确保计算时间不会出现负值
-                        start_time_to_use = max(current_datetime, scheduled_start)
-                        # 累加加工时间
-                        match_time = end_time_to_use - start_time_to_use
-                        total_production_time += match_time
-                        daily_production_time += match_time
-                # 如果跨天或结束则记录当天花费时间,并清零
-                if (current_datetime + match_time).date() == (current_datetime + timedelta(days=1)).date() or (
-                        current_datetime + match_time) >= end_datetime:
-                    if daily_production_time:
-                        daily_duration.append({"date": current_datetime.date(),
-                                               "duration": daily_production_time.total_seconds() / 60})
-                    elif (end_datetime - start_datetime).days == 0:
-                        daily_duration.append({"date": current_datetime.date(),
-                                               "duration": (end_datetime - start_datetime).total_seconds() / 60})
-                    daily_production_time = timedelta(minutes=0)
-                current_datetime += match_time
-
-        total_duration = sum([item["duration"] for item in daily_duration])
-        if total_duration:
-            total_efficiency = (output_quantity * theoretical_time_per_product) / total_duration
-            # 计算每天的生产效率并添加到列表中
-            for entry in daily_duration:
-                production_efficiencies.append({
-                    "date": entry['date'],
-                    "duration": entry['duration'] / 60,  # 小时
-                    "efficiency": total_efficiency * 100
-                })
-        return production_efficiencies
-
-    def unlink(self):
-        if self.env.context.get('_force_unlink'):
-            return super().unlink()
-        for line in self:
-            rec = self.sudo().search([('next_rec', '=', line.id)], limit=1)
-            if line.action_type == 'finish' or line.next_rec:
-                raise UserError(_(u"Records cannot be deleted. You can achieve the same "
-                                  u"result by modifying the timestamp or completing the quantity."))
-            elif rec:
-                rec.next_rec = False
-            else:
-                self.env['mrp.workorder'].sudo().browse(line.workorder_id.id).qty_operation_wip = \
-                    line.workorder_id.qty_operation_wip - line.qty_started
-            line.sudo().with_context(_force_unlink=True).unlink()
-
-    @staticmethod
-    def num_to_time(num):
-        hours_from = int(num)
-        minutes_from = int((hours_from - num) * 60)
-        return time(hours_from, minutes_from, 0)
