@@ -151,13 +151,13 @@ class MrpWorkorder(models.Model):
         # Initialize max_par_op_qty to handle cases where par_orders might be empty
             max_par_op_qty = 0
             if par_orders:  # Check if par_orders is not empty
-                try:
-                    max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
-            except ValueError as e:
+                 try:
+                max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
+            except Exception as e:  # Catch any exception to diagnose the issue
                 _logger.error("Error computing max quantity from parallel orders: %s", e)
                 raise
-                max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
-            if wo.qty_operation_comp < max_par_op_qty:
+
+        if wo.qty_operation_comp < max_par_op_qty:
             raise UserError(_(u"Subsequent operations have started, and the completion quantity "
                               u"cannot be lower than %s." % str(max_par_op_qty)))
                 
