@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 import ast
-import json
-import logging
 
 from odoo import models, fields, _, api
+import json
+import os
 from odoo.exceptions import UserError
+from datetime import datetime, timedelta
+import logging
 
 _logger = logging.getLogger(__name__)
+
 
 class MrpWorkorder(models.Model):
     _inherit = 'mrp.workorder'
@@ -25,16 +28,12 @@ class MrpWorkorder(models.Model):
 
     def button_start(self, qty_started=None, previous_rec=None):
         self.ensure_one()
-        available_qty_from_material = self.compute_raw_material_availability()
-
+        # 判断可开工数量 （计划开工-生产中-已完工） qty_remaining 计划生产数量 qty_operation_wip 生产中 qty_operation_comp 已完工
         if self.qty_operation_avail <= 0 and self.qty_operation_wip <= 0:
             raise UserError(_("No Available to Start Quantity. Planned production Quantity: %s, In-Progress "
-                              "Quantity: %s, Completed Quantity: %s, Available Raw Materials: %s." % 
-                              (self.query_comp_qty(),
-                               self.qty_operation_wip,
-                               self.qty_operation_comp,
-                               available_qty_from_material)))
-
+                              "Quantity: %s, Completed Quantity: %s." % (self.query_comp_qty(),
+                                                                         self.qty_operation_wip,
+                                                                         self.qty_operation_comp)))
         super().button_start()
         if qty_started is not None:
             qty_wip = self.qty_operation_wip + (0 if previous_rec else qty_started)
@@ -47,6 +46,15 @@ class MrpWorkorder(models.Model):
                 previous_rec.next_rec = productivity.id
 
     def end_previous(self, doall=False, Part_omp=False):
+        """
+        Args:
+            doall: inherit
+            Part_omp: Indicates that the current reporting is completed, and there are no further tasks. Otherwise,
+            it will be marked as paused, and when the next operation starts, the last end information will be read
+            to record continuous working time information.
+        Returns:
+
+        """
         if not Part_omp:
             timeline_obj = self.env['mrp.workcenter.productivity']
             domain = [('workorder_id', 'in', self.ids), ('date_end', '=', False)]
@@ -140,17 +148,23 @@ class MrpWorkorder(models.Model):
                 par_orders |= next_order
                 next_order = next_order.next_work_order_id
             par_orders |= next_order
+        # Initialize max_par_op_qty to handle cases where par_orders might be empty
             max_par_op_qty = 0
-            if par_orders:
-                try:
+            if par_orders:  # Check if par_orders is not empty
+                 try:
                     max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
-                except Exception as e:
-                    _logger.error("Error computing max quantity from parallel orders: %s", e)
-                    raise
+                 except Exception as e:  # Catch any exception to diagnose the issue
+                     _logger.error("Error computing max quantity from parallel orders: %s", e)
+                     raise
 
             if wo.qty_operation_comp < max_par_op_qty:
                 raise UserError(_(u"Subsequent operations have started, and the completion quantity "
                               u"cannot be lower than %s." % str(max_par_op_qty)))
+                
+            """max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
+            if wo.qty_operation_comp < max_par_op_qty:
+                raise UserError(_(u"Subsequent operations have started, and the completion quantity "
+                                  u"cannot be lower than %s." % str(max_par_op_qty)))"""
 
     @api.model
     def create(self, values):
@@ -207,6 +221,22 @@ class MrpWorkorder(models.Model):
             else:
                 wo.workorder_efficiency = 0
 
+    @api.depends('time_ids')
+    def _compute_workorder_efficiency(self):
+        for wo in self:
+            planned_proc_time = wo.duration_expected / wo.qty_production
+            done_times = [time for time in wo.time_ids if time.action_type == 'finish']
+            comp_qty = 0
+            comp_duration = 0
+            for time in done_times:
+                comp_qty = comp_qty + time.qty_completed
+                proc_records = time.get_processing_time_recs()
+                comp_duration += sum(proc_records.mapped('duration'))
+            if comp_duration:
+                wo.workorder_efficiency = round(comp_qty * planned_proc_time / comp_duration * 100, 2)
+            else:
+                wo.workorder_efficiency = 0
+
     @api.depends('qty_remaining', 'qty_operation_wip', 'qty_operation_comp')
     def _compute_qty_operation_avail(self):
         for rec in self:
@@ -226,10 +256,3 @@ class MrpWorkorder(models.Model):
                 return self.qty_operation_comp
             else:
                 return self.qty_produced or self.qty_producing or self.qty_production
-
-    def compute_raw_material_availability(self):
-        # Placeholder for the actual implementation.
-        # Implement the logic to calculate available raw materials.
-        # For example, you can use stock.quant to find the available quantity
-        # based on stock and reservation details.
-        return self.env['stock.quant'].search([('product_id', '=', self.product_id.id)]).quantity
