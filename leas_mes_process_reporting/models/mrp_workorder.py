@@ -153,8 +153,8 @@ class MrpWorkorder(models.Model):
             if par_orders:  # Check if par_orders is not empty
                  try:
                     max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
-                except Exception as e:  # Catch any exception to diagnose the issue
-                _logger.error("Error computing max quantity from parallel orders: %s", e)
+                 except Exception as e:  # Catch any exception to diagnose the issue
+                 _logger.error("Error computing max quantity from parallel orders: %s", e)
                     raise
 
             if wo.qty_operation_comp < max_par_op_qty:
