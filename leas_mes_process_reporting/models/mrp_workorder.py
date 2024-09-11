@@ -199,7 +199,7 @@ class MrpWorkorder(models.Model):
             comp_qty = 0
             comp_duration = 0
             for time in done_times:
-                comp_qty += time.qty_completed
+                comp_qty = comp_qty + time.qty_completed
                 proc_records = time.get_processing_time_recs()
                 comp_duration += sum(proc_records.mapped('duration'))
             if comp_duration:
