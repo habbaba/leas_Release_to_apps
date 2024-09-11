@@ -148,9 +148,9 @@ class MrpWorkorder(models.Model):
                 par_orders |= next_order
                 next_order = next_order.next_work_order_id
             par_orders |= next_order
-            if par_orders:  # Check if par_orders is not empty
-            max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
-            if wo.qty_operation_comp < max_par_op_qty:
+                if par_orders:  # Check if par_orders is not empty
+                max_par_op_qty = max(x.qty_operation_wip + x.qty_operation_comp for x in par_orders)
+                if wo.qty_operation_comp < max_par_op_qty:
                 raise UserError(_(u"Subsequent operations have started, and the completion quantity "
                                   u"cannot be lower than %s." % str(max_par_op_qty)))
         else:
