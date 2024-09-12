@@ -160,9 +160,9 @@ class MrpWorkorder(models.Model):
             if wo.state in ['done', 'cancel']:
                 raise UserError(_(u"Not allowed to modify the completion quantity of completed work orders."))
             ref_qty = wo.query_comp_qty()
-            if wo.qty_operation_wip > ref_qty or wo.qty_operation_comp > ref_qty or \
+            """if wo.qty_operation_wip > ref_qty or wo.qty_operation_comp > ref_qty or \
                     wo.qty_operation_wip > (ref_qty - wo.qty_operation_comp):
-                raise UserError(_(u"Cannot Exceed Work Order Quantity."))
+                raise UserError(_(u"Cannot Exceed Work Order Quantity."))"""
             if wo.qty_operation_wip < 0 or wo.qty_operation_comp < 0:
                 raise UserError(_(u"Not Support Negative Numbers."))
             par_orders = self.browse()
