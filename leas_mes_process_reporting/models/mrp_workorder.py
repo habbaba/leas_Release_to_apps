@@ -129,30 +129,29 @@ class MrpWorkorder(models.Model):
             if order.state == 'pending' and order.qty_operation_avail > 0:
                 order.state = 'ready' if order.production_availability == 'assigned' else 'waiting' """
     def _start_nextworkorder(self):
-    super()._start_nextworkorder()
-    # Check if there's a previous work order and transfer quantities directly
-    is_first = self.env['mrp.workorder'].sudo().search([('next_work_order_id', '=', self.id)])
+        super()._start_nextworkorder()
+        # Check if there's a previous work order and transfer quantities directly
+        is_first = self.env['mrp.workorder'].sudo().search([('next_work_order_id', '=', self.id)])
     
-    if self.qty_operation_comp == 0 and is_first:
-        return
-
-    next_order = self.next_work_order_id
-    parallel_orders = []
-    while next_order and not next_order.reporting_point:
-        parallel_orders.append(next_order)
-        next_order = next_order.next_work_order_id
-    parallel_orders.append(next_order)
+        if self.qty_operation_comp == 0 and is_first:
+            return
+        next_order = self.next_work_order_id
+        parallel_orders = []
+        while next_order and not next_order.reporting_point:
+            parallel_orders.append(next_order)
+            next_order = next_order.next_work_order_id
+            parallel_orders.append(next_order)
 
     # Transfer quantities to the next work order(s)
-    for order in parallel_orders:
-        if order.state == 'pending' and order.qty_operation_avail > 0:
-            # Transfer the registered data from the current work order
-            order.qty_operation_wip = self.qty_operation_wip  # Transfer WIP quantity
-            order.qty_operation_comp = self.qty_operation_comp  # Transfer completed quantity
-            order.qty_operation_avail = self.qty_operation_avail  # Transfer available quantity
+        for order in parallel_orders:
+            if order.state == 'pending' and order.qty_operation_avail > 0:
+                # Transfer the registered data from the current work order
+                order.qty_operation_wip = self.qty_operation_wip  # Transfer WIP quantity
+                order.qty_operation_comp = self.qty_operation_comp  # Transfer completed quantity
+                order.qty_operation_avail = self.qty_operation_avail  # Transfer available quantity
 
             # Ensure the next work order is ready for processing
-            order.state = 'ready' if order.production_availability == 'assigned' else 'waiting'
+                order.state = 'ready' if order.production_availability == 'assigned' else 'waiting'
 
 
     @api.constrains('qty_operation_wip', 'qty_operation_comp')
@@ -161,9 +160,9 @@ class MrpWorkorder(models.Model):
             if wo.state in ['done', 'cancel']:
                 raise UserError(_(u"Not allowed to modify the completion quantity of completed work orders."))
             ref_qty = wo.query_comp_qty()
-            if wo.qty_operation_wip > ref_qty or wo.qty_operation_comp > ref_qty or \
+            """if wo.qty_operation_wip > ref_qty or wo.qty_operation_comp > ref_qty or \
                     wo.qty_operation_wip > (ref_qty - wo.qty_operation_comp):
-                raise UserError(_(u"Cannot Exceed Work Order Quantity."))
+                raise UserError(_(u"Cannot Exceed Work Order Quantity."))"""
             if wo.qty_operation_wip < 0 or wo.qty_operation_comp < 0:
                 raise UserError(_(u"Not Support Negative Numbers."))
             par_orders = self.browse()
