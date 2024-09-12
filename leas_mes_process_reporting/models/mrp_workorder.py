@@ -135,9 +135,8 @@ class MrpWorkorder(models.Model):
     
         if self.qty_operation_comp == 0 and is_first:
             return
-
-                    next_order = self.next_work_order_id
-                    parallel_orders = []
+        next_order = self.next_work_order_id
+        parallel_orders = []
             while next_order and not next_order.reporting_point:
                 parallel_orders.append(next_order)
                 next_order = next_order.next_work_order_id
