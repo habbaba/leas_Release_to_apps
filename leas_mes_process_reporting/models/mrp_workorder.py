@@ -137,10 +137,10 @@ class MrpWorkorder(models.Model):
             return
         next_order = self.next_work_order_id
         parallel_orders = []
-            while next_order and not next_order.reporting_point:
-                parallel_orders.append(next_order)
-                next_order = next_order.next_work_order_id
-                parallel_orders.append(next_order)
+        while next_order and not next_order.reporting_point:
+            parallel_orders.append(next_order)
+            next_order = next_order.next_work_order_id
+            parallel_orders.append(next_order)
 
     # Transfer quantities to the next work order(s)
         for order in parallel_orders:
