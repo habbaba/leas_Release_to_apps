@@ -114,6 +114,20 @@ class MrpWorkorder(models.Model):
             },
         }
 
+    """def _start_nextworkorder(self):
+        super()._start_nextworkorder()
+        is_first = self.env['mrp.workorder'].sudo().search([('next_work_order_id', '=', self.id)])
+        if self.qty_operation_comp == 0 and is_first:
+            return
+        next_order = self.next_work_order_id
+        parallel_orders = []
+        while next_order and not next_order.reporting_point:
+            parallel_orders.append(next_order)
+            next_order = next_order.next_work_order_id
+        parallel_orders.append(next_order)
+        for order in parallel_orders:
+            if order.state == 'pending' and order.qty_operation_avail > 0:
+                order.state = 'ready' if order.production_availability == 'assigned' else 'waiting' """
     def _start_nextworkorder(self):
         super()._start_nextworkorder()
         # Check if there's a previous work order and transfer quantities directly
@@ -139,12 +153,16 @@ class MrpWorkorder(models.Model):
             # Ensure the next work order is ready for processing
                 order.state = 'ready' if order.production_availability == 'assigned' else 'waiting'
 
+
     @api.constrains('qty_operation_wip', 'qty_operation_comp')
     def _check_qty_operation(self):
         for wo in self:
             if wo.state in ['done', 'cancel']:
                 raise UserError(_(u"Not allowed to modify the completion quantity of completed work orders."))
             ref_qty = wo.query_comp_qty()
+            """if wo.qty_operation_wip > ref_qty or wo.qty_operation_comp > ref_qty or \
+                    wo.qty_operation_wip > (ref_qty - wo.qty_operation_comp):
+                raise UserError(_(u"Cannot Exceed Work Order Quantity."))"""
             if wo.qty_operation_wip < 0 or wo.qty_operation_comp < 0:
                 raise UserError(_(u"Not Support Negative Numbers."))
             par_orders = self.browse()
@@ -207,27 +225,54 @@ class MrpWorkorder(models.Model):
             ]
             rec.wo_Proc_chart_data = json.dumps(chart_data, indent=4)
 
+    @api.depends('time_ids')
+    def _compute_workorder_efficiency(self):
+        for wo in self:
+            planned_proc_time = wo.duration_expected / wo.qty_production
+            done_times = [time for time in wo.time_ids if time.action_type == 'finish']
+            comp_qty = 0
+            comp_duration = 0
+            for time in done_times:
+                comp_qty = comp_qty + time.qty_completed
+                proc_records = time.get_processing_time_recs()
+                comp_duration += sum(proc_records.mapped('duration'))
+            if comp_duration:
+                wo.workorder_efficiency = round(comp_qty * planned_proc_time / comp_duration * 100, 2)
+            else:
+                wo.workorder_efficiency = 0
+
+    @api.depends('time_ids')
+    def _compute_workorder_efficiency(self):
+        for wo in self:
+            planned_proc_time = wo.duration_expected / wo.qty_production
+            done_times = [time for time in wo.time_ids if time.action_type == 'finish']
+            comp_qty = 0
+            comp_duration = 0
+            for time in done_times:
+                comp_qty = comp_qty + time.qty_completed
+                proc_records = time.get_processing_time_recs()
+                comp_duration += sum(proc_records.mapped('duration'))
+            if comp_duration:
+                wo.workorder_efficiency = round(comp_qty * planned_proc_time / comp_duration * 100, 2)
+            else:
+                wo.workorder_efficiency = 0
+
     @api.depends('qty_remaining', 'qty_operation_wip', 'qty_operation_comp')
     def _compute_qty_operation_avail(self):
         for rec in self:
-            # Skip recalculation if the work order has started or is in progress
-            if rec.state not in ['pending', 'ready']:  # Adjust as per your state flow
-                continue
-            prev_comp_qty = rec.query_comp_qty()  # Gets the previously completed quantity
+            prev_comp_qty = rec.query_comp_qty()
             rec.qty_operation_avail = prev_comp_qty - rec.qty_operation_wip - rec.qty_operation_comp
 
-    def _compute_workorder_efficiency(self):
-        for rec in self:
-            rec.workorder_efficiency = rec.workcenter_id.efficiency
-
     def query_comp_qty(self):
-        '''
-        Queries the quantity available for transfer to the next process.
-        Returns:
-
-        '''
-        qty = self.qty_remaining
-        wo_lst = self.search([('next_work_order_id', '=', self.id), ('reporting_point', '=', True)])
-        if wo_lst:
-            qty -= sum([x.qty_operation_wip + x.qty_operation_comp for x in wo_lst])
-        return qty
+        self.ensure_one()
+        prev_rec = self.search([('next_work_order_id', '=', self.id)], limit=1)
+        if prev_rec:
+            if prev_rec.reporting_point:
+                return prev_rec.qty_operation_comp
+            else:
+                return prev_rec.query_comp_qty()
+        else:
+            if self.state == 'done':
+                return self.qty_operation_comp
+            else:
+                return self.qty_produced or self.qty_producing or self.qty_production
