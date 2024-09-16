@@ -7,7 +7,8 @@ _logger = logging.getLogger(__name__)
 
 class MrpWorkorder(models.Model):
     _inherit = 'mrp.workorder'
-
+    
+    sequence = fields.Integer(string='Sequence', default=1)
     code = fields.Char('Code', readonly=True)
     reporting_point = fields.Boolean(related='operation_id.reporting_point', default=True, store=True)
     qty_operation_wip = fields.Float('In-Process Quantity')
