@@ -18,6 +18,13 @@ class MrpWorkorder(models.Model):
     workorder_efficiency = fields.Float('Workorder Efficiency', compute='_compute_workorder_efficiency')
     thirty_daily_efficiency = fields.Char(related='workcenter_id.thirty_daily_efficiency')
 
+    def action_partial_production(self):
+        for workorder in self:
+            production = workorder.production_id
+            last_work_order = self.env['mrp.workorder'].search([('production_id', '=', production.id)], order='id desc', limit=1)
+            if last_work_order:
+                qty_consuming = production.over_prod_qty - last_work_order.qty_operation_comp
+                production.qty_consuming = qty_consuming
     def button_start(self, qty_started=None, previous_rec=None):
         self.ensure_one()
         if self.qty_operation_avail <= 0 and self.qty_operation_wip <= 0:
@@ -194,9 +201,26 @@ class MrpWorkorder(models.Model):
         if self.env.context.get('skip_qty_operation_avail_computation'):
             return
         for rec in self:
-            prev_comp_qty = rec.query_comp_qty()
-            rec.qty_operation_avail = prev_comp_qty - rec.qty_operation_wip - rec.qty_operation_comp
+            prev_rec = self.search([('next_work_order_id', '=', rec.id)], limit=1)
+            prev_comp_qty = rec.query_comp_qty() if prev_rec else 0
+            production_order = rec.production_id
+            origin_production_order = production_order
 
+            # Traverse back to the original production order if it's a back order
+            while origin_production_order.origin:
+                origin_production_order = self.env['mrp.production'].search(
+                    [('name', '=', origin_production_order.origin)], limit=1)
+                if not origin_production_order:
+                    break
+
+            if origin_production_order and not prev_rec and rec.sequence == 1 and origin_production_order.backorder_sequence > 0:
+                rec.qty_operation_avail = origin_production_order.product_qty + prev_comp_qty - origin_production_order.qty_operation_wip - origin_production_order.qty_operation_comp
+            elif not prev_rec:
+                # First work order in the chain
+                rec.qty_operation_avail = production_order.product_qty - rec.qty_operation_comp - rec.qty_operation_wip
+            else:
+                # Existing logic for other work orders
+                rec.qty_operation_avail = prev_comp_qty - rec.qty_operation_wip - rec.qty_operation_comp
     def query_comp_qty(self):
         self.ensure_one()
         prev_rec = self.search([('next_work_order_id', '=', self.id)], limit=1)

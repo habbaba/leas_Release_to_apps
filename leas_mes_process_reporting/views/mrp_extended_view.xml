@@ -1,0 +1,20 @@
+<odoo>
+    <record id="mrp_production_form_view_inherited" model="ir.ui.view">
+        <field name="name">mrp.production.inherited.form.view</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_confirm']" position="after">
+                <button name="action_produced_continue" string="Partial Production" type="object" class="oe_highlight" attrs="{'invisible': ['|', ('state', 'in', ('draft', 'cancel', 'done')), ('qty_produced', '=', 'product_qty')]}"/>
+            </xpath>
+            <xpath expr="//label[@for='product_qty']" position="before">
+                <field name="qty_equal" invisible='1'/>
+                <field name="qty_consuming" attrs="{'invisible': [('state', 'in', ('done', 'draft', 'cancel'))]}"/>
+                <field name="over_prod_qty" />
+            </xpath>
+            <xpath expr="//field[@name='qty_producing']" position="replace">
+                <field name="qty_producing" class="w-auto" readonly="1" force_save="1" attrs="{'readonly': ['|', ('state', '=', 'cancel'), '&amp;', ('state', '=', 'done'), ('is_locked', '=', True)], 'invisible': ['|', ('state', 'in', ('draft', 'cancel','done')), ('qty_equal', '=', True)]}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

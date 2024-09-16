@@ -30,7 +30,7 @@
         'static/description/Demo5.png',
         'static/description/Demo6.png',
     ],
-    'depends': ['base', 'mrp', 'leas_chart_widget'],
+    'depends': ['base', 'mrp','stock','leas_chart_widget'],
 
     # always loaded
     'data': [
@@ -42,6 +42,7 @@
         'views/mrp_reporting_operation_wizard.xml',
         'views/mrp_open_workorder_wizard.xml',
         'views/mrp_workcenter_productivity.xml',
+        'views/mrp_extended_view.xml',
         'data/mrp_workorder_seq.xml',
     ],
     # only loaded in demonstration mode

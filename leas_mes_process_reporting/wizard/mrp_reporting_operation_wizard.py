@@ -79,3 +79,12 @@ class MrpReportingOpreationnWizard(models.TransientModel):
                         workorder.end_previous(Part_omp=True)
                     else:
                         workorder.button_finish()
+
+            # Record qty_completed before checking if this is the last work order
+            production = workorder.production_id
+            last_work_order = self.env['mrp.workorder'].search([('production_id', '=', production.id)], order='id desc', limit=1)
+            if workorder == last_work_order:
+                # Trigger _compute_over_production_qty
+                production._compute_over_production_qty()
+                # Call action_produced_continue
+                production.action_produced_continue()

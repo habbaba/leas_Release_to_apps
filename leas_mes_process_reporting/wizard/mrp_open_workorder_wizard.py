@@ -26,4 +26,3 @@ class MrpOpenWorkOrderWizard(models.TransientModel):
             return order.action_mrp_workorder_view_form_tablet()
         else:
             raise UserError(_("No Workorder found for the given code. "))
-
